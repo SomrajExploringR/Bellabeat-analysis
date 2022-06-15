@@ -1,0 +1,173 @@
+---
+title: "Bellabeat Analysis"
+author: "Somraj Kar"
+date: '2022-06-14'
+output: html_document
+---
+
+# Introduction
+Bellabeat is a high-tech manufacturer of health-focused products for women. It's a successful small company, but they have the potential to become a larger player in the global smart device market. We've been asked to focus on one of Bellabeat’s products and analyze smart device data to gain insights into how consumers are using their smart devices. The insights we draw will then help drive effective marketing strategies for the company.
+
+# Task at hand (ASK)
+To analyze smart device usage data in order to gain insight into how consumers use non-Bellabeat smart devices to generate data driven marketing strategies for the overall growth of the company.
+
+# Importing the smart device data (PREPARE)
+The relevant pieces of data are all available here <https://www.kaggle.com/datasets/arashnic/fitbit>
+To access the data, let's first load all the necessary packages.
+```{r loading packages}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(skimr)
+```
+Now that all the required packages are good to go, Let's import the .csv files 
+```{r importing the data}
+activity <- read_csv("bellabeat_20220512/dailyActivity_merged.csv")
+heartrate <- read_csv("bellabeat_20220512/heartrate_seconds_merged.csv")
+calories <- read_csv("bellabeat_20220512/hourlyCalories_merged.csv")
+intensity <- read_csv("bellabeat_20220512/hourlyIntensities_merged.csv")
+steps <- read_csv("bellabeat_20220512/hourlySteps_merged.csv")
+sleep <- read_csv("bellabeat_20220512/sleepDay_merged.csv")
+weight <- read_csv("bellabeat_20220512/weightLogInfo_merged.csv")
+```
+Let's now take a quick peek at the overview of the datasets
+```{r 1st look}
+head(activity) 
+head(heartrate) 
+head(calories)
+head(intensity) 
+head(steps) 
+head(sleep) 
+head(weight) 
+```
+# Cleaning the Data (PROCESS)
+Now that we have the data at our disposal, we can progress to the processing stage where we tweak inconsistencies, sort and filter our data to make for a smoother analysis. As was evident from the overview of the datasets, there are a few inconsistencies with the time format which require fixing.
+```{r syncing the time formats}
+activity$ActivityDate=as.POSIXct(activity$ActivityDate, format="%m/%d/%Y", tz=Sys.timezone())
+activity$date <- format(activity$ActivityDate, format = "%m/%d/%y")
+
+sleep$SleepDay=as.POSIXct(sleep$SleepDay, format="%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+sleep$date <- format(sleep$SleepDay, format = "%m/%d/%y")
+```
+
+# Exploring and summarazing the data (ANALYZE)
+Now that our data has been cleaned and is ready for analysis, let's take a deeper dive into the data at hand.
+```{r distinct reports availabe across datasets}
+n_distinct(activity$Id)
+n_distinct(heartrate$Id)
+n_distinct(calories$Id)
+n_distinct(intensity$Id)
+n_distinct(steps$Id)
+n_distinct(sleep$Id)
+n_distinct(weight$Id)
+```
+As we can there different unique Ids corresponding to different datasets. Based on this we should pay closer attention to the ones with more unique values to avoid generalisation. 
+Now let's sum up the datasets to gain a deeper insight into the data.
+```{r data summary}
+activity %>%  
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes, Calories) %>%
+  summary()
+
+activity %>%
+  select(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes) %>%
+  summary()
+
+calories %>% 
+  select(Calories) %>% 
+  summary()
+
+sleep %>%
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>%
+  summary()
+
+weight %>%
+  select(WeightKg, BMI) %>%
+  summary()
+
+heartrate %>% 
+  select(Value) %>% 
+  summary()
+
+steps %>% 
+  select(StepTotal) %>% 
+  summary()
+
+intensity %>% 
+  select(TotalIntensity, AverageIntensity) %>% 
+  summary()
+```
+Let's take a moment to interpret the results. Some of the key takeaways include:
+
+* The people sampled, walk an average of 7638 steps a day, which is much lower than recommended average of 10000 steps per day according to health studies.
+
+* The mean Sedentary time (991 mins ~ 16.5 hours) is all too high compared to the recommended average of <= 9 hours as is suggested by health studies.
+
+* The mean average time spent being very active (21 mins) is also fairly low compared to the prescribed 30 minutes of exercising per day in accordance with the health studies.
+
+* The mean amount of sleep barely falls short of the ideal 7 to 9 hours of sleep as is claimed by health professional.
+
+* The average BMI stands slightly higher than the ideal 18.5-24.9 range.
+
+Let's now merge the sleep and activity datasets to facilitate more comprehensive analysis and visualisations.
+```{r}
+merged_data <- merge(sleep, activity, by=c('Id', 'date'))
+```
+Now that we have the merged data available let's remove the "Id"(4057192912) which corresponds to very few values to avoid skewness.
+```{r removing the outlier}
+activity_clean <- activity[-c(4057192912), ]
+sleep_clean <- sleep[-c(4057192912), ]
+weight_clean <- weight[-c(4057192912), ]
+merged_data_clean <- merged_data[-c(4057192912), ]
+```
+# Visualising the findings (SHARE)
+Let's now put the analysis into perspective with the use of data visualisations,
+```{r}
+ggplot(data = merged_data_clean) + geom_point(mapping=aes(x=TotalSteps, y=Calories))+ geom_smooth(mapping=aes(x= TotalSteps, y=Calories))
+```
+
+```{r}
+ggplot(data = merged_data_clean) + geom_point(mapping=aes(x=TotalMinutesAsleep, y=SedentaryMinutes))+ geom_smooth(mapping=aes(x=TotalMinutesAsleep, y=SedentaryMinutes))
+
+```
+
+```{r}
+ggplot(data = merged_data_clean) + geom_point(mapping=aes(x=TotalSteps, y=SedentaryMinutes))
+```
+
+```{r}
+ggplot(data = merged_data_clean) + geom_point(mapping=aes(x=VeryActiveMinutes, y=Calories)) + geom_smooth(mapping=aes(x=VeryActiveMinutes, y=Calories))
+```
+
+```{r}
+xy <- mutate(merged_data_clean, "totalActivityMinutes" = VeryActiveMinutes + FairlyActiveMinutes + LightlyActiveMinutes)
+ggplot(data = xy) + geom_point(mapping=aes(x=totalActivityMinutes, y=TotalMinutesAsleep))
+```
+
+
+Key Observations :
+
+* the 1st plot suggests there exists a positive correlation between the total steps taken and the calories burned.
+
+* The 2nd plot points out some very interesting. As we spend more time in sedentary, we get less sleep.
+
+* There seems to be no correlation between the total steps taken and sedentary time which is very fascinating.
+
+* A strong correlation between very active minutes and calories burned.
+
+* No correlation between the amount of sleep and total active minutes spent, which is interesting as more sleep supposedly leads to higher efficiency which should result in more activity. 
+
+# Suggestions (ACT)
+Data driven strategies to incorporate into the Bellabeat app :
+
+* Notifying the users where they stand with regards to the 10000 steps they should be walking everyday, at continuous intervals.
+
+* Designing a sustainable light activity plan for the users to follow during breaks at work or schools/colleges to lower the sedentary time spent, which contributes to health disorders.
+
+* Customised sleeping routines based on the morning commitments of the users to raise the amount of time slept. Also, reminders to go to bed at a specific time so they can meet the daily target of 8 hours of sleep based on their morning schedules.
+
+* Customised workout plans for the users based on their health conditions, fitness goals and schedules. 
+
